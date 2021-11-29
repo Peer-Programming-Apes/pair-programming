@@ -13,8 +13,8 @@ io.on('connection', socket => {
   console.log(currTime(), "a usr connected");
 
 
-  socket.on('monaco change', (char) => {
-    socket.broadcast.emit('monaco change', char);
+  socket.on('monaco change', (char, action) => {
+    socket.broadcast.emit('monaco change', char, action);
   });
 
 
