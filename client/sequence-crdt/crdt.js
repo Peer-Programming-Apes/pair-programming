@@ -71,6 +71,9 @@ export class CRDT {
 
     // Process deletion buffer
     this.processDeletionBuffer();
+
+    // [EDIT]: returning index of insertion
+    return index;
   }
 
   handleLocalDelete(index) {
@@ -89,7 +92,7 @@ export class CRDT {
     const index = this.findDeletionIndex(char);
     if (index < 0) {
       this.delBuffer.push(char);
-      return;
+      return index;
     }
 
     this.struct.splice(index, 1);
@@ -97,6 +100,8 @@ export class CRDT {
 
     // Update version
     this.vector.update(new Version(char.siteID, char.counter));
+
+    return index;
   }
 
   processDeletionBuffer() {
