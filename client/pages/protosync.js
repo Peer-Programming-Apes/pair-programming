@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Monaco from '../components/Monaco';
 import { io, Socket } from 'socket.io-client';
 import { CRDT, randomID, Char } from '../sequence-crdt/index'
@@ -8,51 +8,59 @@ export default function protosync() {
     const [editorValue, setEditorValue] = useState();
     const [crdtDoc, setCrdtDoc] = useState();
 
+    const editorRef = useRef(null);
 
+    function handleEditorDidMount(editor, monaco) {
+        editorRef.current = editor;     // get reference to edito
+        // console.log("editor:", editor, "model:", editor.getModel());
 
+        // change things about editor here:
+        // changing EOL of editor to LF as CR causes loopback issues during remote insert
+        editor.getModel().setEOL(0);
+    }
+
+    // handle change events of MonacoEditor
     function onMonacoChange(value, event) {
-        // console.log(crdtDoc);
-        // socket.emit('monaco change', value, event);
-        console.log(value, event);
-        if (event.changes[0].forceMoveMarkers) {
-            console.log("forceMoveMarkers", event);
-            return;
-        }
+        console.log("onMonacoChange", value, event);
+
+        // a "fix" for loopback issue caused by CR from CRLF EOL
+        // no need to do this if setting EOF for the model
+        // may cause unknown side effects!
+        // if (event.changes[0].forceMoveMarkers) {
+        //     console.log("forceMoveMarkers", event);
+        //     return;
+        // }
+
+        // very basic; TODO: handle all types of event
         let text = event.changes[0].text;
-        // console.log(text);
         let offset = event.changes[0].rangeOffset;
         let rangeLen = event.changes[0].rangeLength;
-        let len = text.length;
-        if (len == 0) {
-            for (let i = 0; i < rangeLen; i++) {
-                let char = crdtDoc.handleLocalDelete(offset);
-                socket.emit('monaco change', char, "delete");
-                console.log("crdt", crdtDoc.text);
-            }
+
+        // delete rangeLen characters starting from offSet!
+        for (let i = 0; i < rangeLen; i++) {
+            let char = crdtDoc.handleLocalDelete(offset);
+            socket.emit("monaco change", char, "delete");
+            console.log("onMonacoChange:localDelete", crdtDoc.text);
         }
-        else {
-            // console.log(event, text, len);
-            for (let i = 0; i < len; i++) {
-                let char = crdtDoc.handleLocalInsert(offset + i, text[i]);
-                console.log("crdt", crdtDoc.text);
-                // console.log(char);
-                socket.emit('monaco change', char, "insert");
-            }
+
+        // insert all characters from text starting at offset
+        for (let i = 0; i < text.length; i++) {
+            let char = crdtDoc.handleLocalInsert(offset + i, text[i]);
+            socket.emit('monaco change', char, "insert");
+            console.log("onMonacoChange:localInsert", crdtDoc.text);
         }
 
     };
 
     function onRemoteChange(char, action) {
-        console.log(char);
-        // console.log(crdtDoc);
-        // console.log(socket);
+        console.log("onRemoteChange", char, action);
         if (action == "insert")
             crdtDoc.handleRemoteInsert(char);
         else if (action == "delete")
             crdtDoc.handleRemoteDelete(char);
-        console.log(crdtDoc.text);
-        // console.log("check", editorValue === crdtDoc.text);
+
         setEditorValue(crdtDoc.text);
+        console.log("onRemoteChange", crdtDoc.text);
     }
 
     useEffect(() => {
@@ -63,8 +71,8 @@ export default function protosync() {
             console.log("Connected!");
 
             const doc = new CRDT(randomID());
-            // console.log("doc", doc);
             setCrdtDoc(doc);
+
             // TODO: fix koro
             // setEditorValue("");
         });
@@ -79,13 +87,13 @@ export default function protosync() {
         }
     }, [crdtDoc]);
 
-    useEffect(() => {
-        // console.log("Editor value changed", editorValue);
-    }, [editorValue]);
+    // useEffect(() => {
+    //     console.log("useEffect:editorValue", editorValue);
+    // }, [editorValue]);
 
     return (
         <div>
-            <Monaco onChange={onMonacoChange} value={editorValue} />
+            <Monaco onChange={onMonacoChange} value={editorValue} onMount={handleEditorDidMount} />
         </div>
     )
 }

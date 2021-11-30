@@ -13,6 +13,7 @@ export default function Monaco(props) {
                 defaultValue=""
                 onChange={props.onChange}
                 value={props.value}
+                onMount={props.onMount}
             />
         </div>
     )
