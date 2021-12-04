@@ -71,6 +71,9 @@ export class CRDT {
 
     // Process deletion buffer
     this.processDeletionBuffer();
+
+    // [EDIT]: returning index of insertion
+    return index;
   }
 
   handleLocalDelete(index) {
@@ -89,7 +92,7 @@ export class CRDT {
     const index = this.findDeletionIndex(char);
     if (index < 0) {
       this.delBuffer.push(char);
-      return;
+      return index;
     }
 
     this.struct.splice(index, 1);
@@ -97,6 +100,8 @@ export class CRDT {
 
     // Update version
     this.vector.update(new Version(char.siteID, char.counter));
+
+    return index;
   }
 
   processDeletionBuffer() {
@@ -236,15 +241,15 @@ export class CRDT {
     let left = 0;
     let right = this.struct.length - 1;
     let mid, compareNum;
-    if (this.struct.length === 0 || char.compareTo(this.struct[left]) < 0) {
+    if (this.struct.length === 0 || CharcompareTo(char, this.struct[left]) < 0) {
       return left;
-    } else if (char.compareTo(this.struct[right]) > 0) {
+    } else if (CharcompareTo(char, this.struct[right]) > 0) {
       return this.struct.length;
     }
 
     while (left + 1 < right) {
       mid = Math.floor(left + (right - left) / 2);
-      compareNum = char.compareTo(this.struct[mid]);
+      compareNum = CharcompareTo(char, this.struct[mid]);
       if (compareNum === 0) {
         return mid;
       } else if (compareNum > 0) {
@@ -253,7 +258,7 @@ export class CRDT {
         right = mid;
       }
     }
-    return char.compareTo(this.struct[left]) === 0 ? left : right;
+    return CharcompareTo(char, this.struct[left]) === 0 ? left : right;
   }
 
   findDeletionIndex(char) {
@@ -268,7 +273,7 @@ export class CRDT {
 
     while (left + 1 < right) {
       mid = Math.floor(left + (right - left) / 2);
-      compareNum = char.compareTo(this.struct[mid]);
+      compareNum = CharcompareTo(char, this.struct[mid]);
 
       if (compareNum === 0) {
         return mid;
@@ -279,13 +284,45 @@ export class CRDT {
       }
     }
 
-    if (char.compareTo(this.struct[left]) === 0) {
+    if (CharcompareTo(char, this.struct[left]) === 0) {
       return left;
-    } else if (char.compareTo(this.struct[right]) === 0) {
+    } else if (CharcompareTo(char, this.struct[right]) === 0) {
       return right;
     } else {
       return -1;
       // throw new Error("Character does not exist in CRDT.");
     }
+  }
+}
+
+function IDcompareTo(thisID, otherID) {
+  if (thisID.digit < otherID.digit) {
+    return -1;
+  } else if (thisID.digit > otherID.digit) {
+    return 1;
+  } else {
+    return thisID.siteID.localeCompare(otherID.siteID);
+  }
+}
+
+function CharcompareTo(thisChar, otherChar) {
+  let comp, id1, id2;
+  const pos1 = thisChar.position;
+  const pos2 = otherChar.position;
+  const minLength = Math.min(pos1.length, pos2.length);
+  for (let i = 0; i < minLength; i++) {
+    id1 = pos1[i];
+    id2 = pos2[i];
+    comp = IDcompareTo(id1, id2);
+    if (comp !== 0) {
+      return comp;
+    }
+  }
+  if (pos1.length < pos2.length) {
+    return -1;
+  } else if (pos1.length > pos2.length) {
+    return 1;
+  } else {
+    return 0;
   }
 }

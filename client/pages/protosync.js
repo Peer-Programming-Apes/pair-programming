@@ -3,130 +3,157 @@ import Monaco from '../components/Monaco';
 import { io, Socket } from 'socket.io-client';
 import { CRDT, randomID, Char } from '../sequence-crdt/index'
 
+
+const remoteDeltas = [];    // received deltas to be applied to crdt
+let crdtDoc;
+
+
 export default function protosync() {
+
     const [socket, setSocket] = useState();
     const [editorValue, setEditorValue] = useState();   // dummy editor value
     const [_editorValue, _setEditorValue] = useState(); // actual editor value
-    const [crdtDoc, setCrdtDoc] = useState();
     const [cursorPosition, setcursorPosition] = useState();
     const [lastCursorPosition, setLastCursorPosition] = useState();
+    const [isReady, setIsReady] = useState(false);
 
     const editorRef = useRef(null);
 
-    function ready() {
-        if (crdtDoc &&
-            editorRef && editorRef.current &&
-            socket && socket.connected
-        ) return true;
-        else return false;
-    }
-
     // onMount handler
     function handleEditorDidMount(editor, monaco) {
+        console.log("Mounted!");
         editorRef.current = editor;
 
         // change things about editor here:
-        // changing EOL of editor to LF as CR causes loopback issues during remote insert
+        // changing EOL of editor to LF(0) as CR causes loopback issues during remote insert
         editor.getModel().setEOL(0);
 
         editor.onDidChangeCursorPosition((e) => {
             setcursorPosition(e);
         });
+        
+
+        applyRemoteChanges();
     }
+
 
     // handle change events of MonacoEditor
     function onMonacoChange(value, event) {
-
-        // TODO check if everything is set up
-        if (!ready()) {
-            console.log("Not ready!");
-            // handle being not ready!
-            return;
-        }
-
+        console.log(event);
         // very basic; TODO: handle all types of event
         let text = event.changes[0].text;
         let offset = event.changes[0].rangeOffset;
         let rangeLen = event.changes[0].rangeLength;
 
+        let deltas = [];
         // delete rangeLen number of characters starting from offSet!
         for (let i = 0; i < rangeLen; i++) {
             let char = crdtDoc.handleLocalDelete(offset);
-            socket.emit("monaco change", char, "delete");
+            deltas.push({ char, action: "delete" });
+            if (deltas.length == 1000) {
+                socket.emit('monaco changes', deltas);
+                console.log("emitting", deltas.length);
+                deltas = [];
+            }
         }
 
         // insert all characters from text starting at offset
         for (let i = 0; i < text.length; i++) {
             let char = crdtDoc.handleLocalInsert(offset + i, text[i]);
-            socket.emit('monaco change', char, "insert");
+            deltas.push({ char, action: "insert" });
+            if (deltas.length == 1000) {
+                socket.emit('monaco changes', deltas);
+                console.log("emitting", deltas.length);
+                deltas = [];
+            }
+        }
+        if (deltas.length > 0) {
+            console.log("emitting", deltas.length);
+            socket.emit('monaco changes', deltas);
         }
     };
 
+
     // apply remote change
-    function onRemoteChange(char, action) {
-        if (action == "insert") {
-            crdtDoc.handleRemoteInsert(char);
+    function applyRemoteChanges() {
+        // check if editor has been mounted
+        if (!editorRef.current) {
+            console.log("applyRemoteChanges(): Editor not mounted!");
+            return;
         }
-        else if (action == "delete") {
-            crdtDoc.handleRemoteDelete(char);
+
+        console.log("applyRemoteChanges()", remoteDeltas.length);
+        for (let delta of remoteDeltas) {
+            if (delta.action == "insert") {
+                crdtDoc.handleRemoteInsert(delta.char);
+            }
+            else if (delta.action == "delete") {
+                crdtDoc.handleRemoteDelete(delta.char);
+            }
+            else {
+                console.log("applyRemoteChanges(): delta.action invalid!", delta);
+            }
         }
+        
+        // remoteDeltas.length = 0;    // clear the array
+        while(remoteDeltas.length > 0) {
+            remoteDeltas.pop();
+        }
+        
+        // console.log("applyRemoteChanges()", crdtDoc.text);
         setEditorValue(crdtDoc.text);
     }
 
     useEffect(() => {
-        const s = io('http://192.168.0.104:3001');
-        setSocket(s);
+        const s = io('http://localhost:3001');
 
         s.on('connect', () => {
             console.log("Connected!");
-            const doc = new CRDT(randomID());
-            setCrdtDoc(doc);
+            crdtDoc = new CRDT(new randomID());
+
+            s.on('monaco changes', (deltas) => {
+                remoteDeltas.push(...deltas);
+                applyRemoteChanges();
+            });
+
+            s.on('disconnect', (reason) => {
+                console.log("disconnected", reason);
+                setIsReady(false);
+            });
+
+            setIsReady(true);
         });
+
+        // s.onAny((event, ...args) => {
+        //     console.log("socket event", event, args);
+        // });
+
+        setSocket(s);
+
     }, []);
 
-    useEffect(() => {
-        // console.log("crdtDoc changed", crdtDoc);
-        if (crdtDoc && socket) {
-            socket.on('monaco change', onRemoteChange);
-        }
-    }, [crdtDoc]);
-
+    // store last cursor position before updating editor
+    // TODO: handle selections etc.
     useEffect(() => {
         setLastCursorPosition(cursorPosition);
         _setEditorValue(editorValue);
     }, [editorValue]);
 
+    // update editor with new value
     useEffect(() => {
         if (editorRef && lastCursorPosition) {
             editorRef.current.setPosition(lastCursorPosition.position);
         }
     }, [_editorValue]);
 
-
-    return (
-        <div>
-            <Monaco onChange={onMonacoChange} value={_editorValue} onMount={handleEditorDidMount}/>
-        </div>
-    )
+    if (isReady)
+        return (
+            <div>
+                <Monaco onChange={onMonacoChange} value={_editorValue} onMount={handleEditorDidMount} />
+            </div>
+        )
+    else
+        return (
+            <div> Trying to connect... </div>
+        )
 }
-
-
-/*
-    Extra code:
-
-    // from onMonacoChange()
-    // a "fix" for loopback issue caused by CR from CRLF EOL
-    // no need to do this if setting EOF for the model
-    // may cause unknown side effects!
-    if (event.changes[0].forceMoveMarkers) {
-        console.log("forceMoveMarkers", event);
-        return;
-    }
-
-
-
-    useEffect(() => {
-        console.log("useEffect:cursorPosition", cursorPosition);
-    }, [cursorPosition]);
-
-*/
