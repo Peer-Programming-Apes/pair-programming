@@ -1,45 +1,59 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Monaco from '../components/Monaco';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 import { CRDT, randomID, Char } from '../sequence-crdt/index'
 
 const INSERT = 0;
 const DELETE = 1;
 const MONACO_CHANGES = "monaco changes";
 const CRDT_INIT = "crdt init"
-const EMIT_LIMIT = 2000;
-
-let crdtDoc;
-let socket;
-
+const EMIT_LIMIT = 1000;
 
 export default function protosync() {
     const [isReady, setIsReady] = useState(false);
-    const [editorValue, setEditorValue] = useState();   // dummy editor value
-    const [_editorValue, _setEditorValue] = useState(); // actual editor value
-    const [cursorPosition, setcursorPosition] = useState();
-    const [lastCursorPosition, setLastCursorPosition] = useState();
 
-    const editorRef = useRef(null);
+    const crdtRef = useRef(null)
+    const socketRef = useRef(null)
+    const editorRef = useRef(null);     // to store editor reference
+    const toDisposeRef = useRef(null);  // to store Disposable reference for attached handler
+    const cursorPositionRef = useRef(null);
 
     useEffect(() => {
-        socket = io('http://192.168.0.104:3001');
+        socketRef.current = io('http://192.168.0.104:3001');
 
-        socket.on('connect', (changes) => {
+        socketRef.current.on('connect', () => {
             console.log("Connected!");
 
-            socket.on(CRDT_INIT, (changes) => {
-                crdtDoc = new CRDT(new randomID());
+            // initialize crdt data structure and let monaco mount
+            socketRef.current.on(CRDT_INIT, (changes) => {
+                crdtRef.current = new CRDT(new randomID());
                 onRemoteChange(changes);
                 setIsReady(true);
-            })
+            });
 
-            socket.on(MONACO_CHANGES, onRemoteChange);
+            socketRef.current.on(MONACO_CHANGES, onRemoteChange);
 
-            socket.on('disconnect', () => {setIsReady(false);});
+            socketRef.current.on('disconnect', (reason) => {
+                console.log("disconnected", reason);
+                setIsReady(false);
+                editorRef.current = null;
+                toDisposeRef.current = null;
+                cursorPositionRef.current = null;
+            });
         });
 
     }, []);
+
+    function attachOnDidChangeContentHandler() {
+        if (!editorRef.current) return;
+        toDisposeRef.current = editorRef.current.getModel().onDidChangeContent(handleAndEmitUserChanges);
+    }
+
+    function detachOnDidChangeContentHandler() {
+        if (!toDisposeRef.current) return;
+        toDisposeRef.current.dispose();
+        toDisposeRef.current = null;
+    }
 
     // onMount handler
     function handleEditorDidMount(editor, monaco) {
@@ -49,84 +63,111 @@ export default function protosync() {
         // changing EOL of editor to LF as CR causes loopback issues during remote insert
         editor.getModel().setEOL(0);
 
+        // capture cursor positions
         editor.onDidChangeCursorPosition((e) => {
-            setcursorPosition(e);
+            cursorPositionRef.current = e;
         });
+
+        attachOnDidChangeContentHandler();
     }
 
-    // handle change events of MonacoEditor
-    function onMonacoChange(value, event) {
-        console.log(event);
+    function setValue(value) {
+        // do not do anythng if editor not mounted
+        if (!editorRef.current) return;
+
+        // detaching OnDidChangeContent handler to avoid reccursive changes
+        detachOnDidChangeContentHandler();
+
+        // storing the current cursor position
+        // TODO: fix cursor position for same line changes
+        const position = null;
+        if (cursorPositionRef.current) position = cursorPositionRef.current.position;
+
+        editorRef.current.getModel().setValue(value);
+
+        // set the cursor position
+        if (position) editorRef.current.setPosition(position);
+
+        // reattach the OnDidChangeContent handler
+        attachOnDidChangeContentHandler();
+    }
+
+
+    // add changes to crdt, emit changes
+    function handleAndEmitUserChanges(event) {
         let changes = [];
+
         for (let monacoChange of event.changes) {
-            // very basic; TODO: handle all types of event
             let text = monacoChange.text;
-            let offset = monacoChange.rangeOffset;
-            let rangeLen = monacoChange.rangeLength;
+            let offset = monacoChange.rangeOffset;  // offset of changes
+            let deleteCount = monacoChange.rangeLength;
 
-
-            // delete rangeLen number of characters starting from offSet!
-            for (let i = 0; i < rangeLen; i++) {
-                let char = crdtDoc.handleLocalDelete(offset);
+            console.log("deleted " + deleteCount + " characters");
+            // delete deleteCount characters starting from offSet!
+            for (let i = 0; i < deleteCount; i++) {
+                let char = crdtRef.current.handleLocalDelete(offset);
                 changes.push({ char, type: DELETE });
+
+                // limiting the number of changes per emit
                 if (changes.length === EMIT_LIMIT) {
-                    socket.emit(MONACO_CHANGES, changes);
+                    console.log("emitting " + changes.length + " changes");
+                    socketRef.current.emit(MONACO_CHANGES, changes);
                     changes = [];
                 }
             }
 
+            console.log("inserted " + text.length + " characters");
             // insert all characters from text starting at offset
             for (let i = 0; i < text.length; i++) {
-                let char = crdtDoc.handleLocalInsert(offset + i, text[i]);
+                let char = crdtRef.current.handleLocalInsert(offset + i, text[i]);
                 changes.push({ char, type: INSERT });
+
+                // limiting the number of changes per emit
                 if (changes.length === EMIT_LIMIT) {
-                    socket.emit(MONACO_CHANGES, changes);
+                    console.log("emitting " + changes.length + " changes");
+                    socketRef.current.emit(MONACO_CHANGES, changes);
                     changes = [];
                 }
             }
         }
-        if (changes.length > 0)
-            socket.emit(MONACO_CHANGES, changes);
-    };
 
-    // apply remote change
+        if (changes.length > 0) {
+            console.log("emitting " + changes.length + " changes");
+            socketRef.current.emit(MONACO_CHANGES, changes);
+        }
+    }
+
+    // apply remote change and update value editor
     function onRemoteChange(changes) {
-        console.log(changes.length);
+        console.log("received " + changes.length + " changes");
+
         for (let change of changes) {
             if (change.type === INSERT) {
-                crdtDoc.handleRemoteInsert(change.char);
+                crdtRef.current.handleRemoteInsert(change.char);
             }
             else if (change.type === DELETE) {
-                crdtDoc.handleRemoteDelete(change.char);
+                crdtRef.current.handleRemoteDelete(change.char);
             }
             else {
                 console.log("invalid change.type", change);
             }
         }
-        setEditorValue(crdtDoc.text);
+        setValue(crdtRef.current.text);
     }
 
-    useEffect(() => {
-        setLastCursorPosition(cursorPosition);
-        _setEditorValue(editorValue);
-    }, [editorValue]);
 
-    useEffect(() => {
-        if (editorRef && lastCursorPosition) {
-            editorRef.current.setPosition(lastCursorPosition.position);
-        }
-    }, [_editorValue]);
-
-    if (isReady)
+    if (isReady) {
         return (
             <div>
-                <Monaco onChange={onMonacoChange} value={_editorValue} onMount={handleEditorDidMount} />
+                <Monaco value={crdtRef.current.text} onMount={handleEditorDidMount} />
             </div>
         )
-    else 
+    }
+    else {
         return (
             <div>
                 Trying to connect...
             </div>
         )
+    }
 }
