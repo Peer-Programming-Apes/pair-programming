@@ -3,6 +3,11 @@ import Monaco from '../components/Monaco';
 import { io, Socket } from 'socket.io-client';
 import { CRDT, randomID, Char } from '../sequence-crdt/index'
 
+const INSERT = 0;
+const DELETE = 1;
+const MONACO_CHANGES = "monaco changes";
+const EMIT_LIMIT = 2000;
+
 export default function protosync() {
     const [socket, setSocket] = useState();
     const [editorValue, setEditorValue] = useState();   // dummy editor value
@@ -12,14 +17,6 @@ export default function protosync() {
     const [lastCursorPosition, setLastCursorPosition] = useState();
 
     const editorRef = useRef(null);
-
-    function ready() {
-        if (crdtDoc &&
-            editorRef && editorRef.current &&
-            socket && socket.connected
-        ) return true;
-        else return false;
-    }
 
     // onMount handler
     function handleEditorDidMount(editor, monaco) {
@@ -36,39 +33,47 @@ export default function protosync() {
 
     // handle change events of MonacoEditor
     function onMonacoChange(value, event) {
+        let changes = [];
+        for (let monacoChange of event.changes) {
+            // very basic; TODO: handle all types of event
+            let text = monacoChange.text;
+            let offset = monacoChange.rangeOffset;
+            let rangeLen = monacoChange.rangeLength;
 
-        // TODO check if everything is set up
-        if (!ready()) {
-            console.log("Not ready!");
-            // handle being not ready!
-            return;
+
+            // delete rangeLen number of characters starting from offSet!
+            for (let i = 0; i < rangeLen; i++) {
+                let char = crdtDoc.handleLocalDelete(offset);
+                changes.push({ char, type: DELETE });
+                if (changes.length === EMIT_LIMIT) {
+                    socket.emit(MONACO_CHANGES, changes);
+                    changes = [];
+                }
+            }
+
+            // insert all characters from text starting at offset
+            for (let i = 0; i < text.length; i++) {
+                let char = crdtDoc.handleLocalInsert(offset + i, text[i]);
+                changes.push({ char, type: INSERT });
+                if (changes.length === EMIT_LIMIT) {
+                    socket.emit(MONACO_CHANGES, changes);
+                    changes = [];
+                }
+            }
         }
-
-        // very basic; TODO: handle all types of event
-        let text = event.changes[0].text;
-        let offset = event.changes[0].rangeOffset;
-        let rangeLen = event.changes[0].rangeLength;
-
-        // delete rangeLen number of characters starting from offSet!
-        for (let i = 0; i < rangeLen; i++) {
-            let char = crdtDoc.handleLocalDelete(offset);
-            socket.emit("monaco change", char, "delete");
-        }
-
-        // insert all characters from text starting at offset
-        for (let i = 0; i < text.length; i++) {
-            let char = crdtDoc.handleLocalInsert(offset + i, text[i]);
-            socket.emit('monaco change', char, "insert");
-        }
+        if (changes.length > 0)
+            socket.emit(MONACO_CHANGES, changes);
     };
 
     // apply remote change
-    function onRemoteChange(char, action) {
-        if (action == "insert") {
-            crdtDoc.handleRemoteInsert(char);
-        }
-        else if (action == "delete") {
-            crdtDoc.handleRemoteDelete(char);
+    function onRemoteChange(changes) {
+        for (let change of changes) {
+            if (change.type === INSERT) {
+                crdtDoc.handleRemoteInsert(change.char);
+            }
+            else if (change.type === DELETE) {
+                crdtDoc.handleRemoteDelete(change.char);
+            }
         }
         setEditorValue(crdtDoc.text);
     }
@@ -87,7 +92,7 @@ export default function protosync() {
     useEffect(() => {
         // console.log("crdtDoc changed", crdtDoc);
         if (crdtDoc && socket) {
-            socket.on('monaco change', onRemoteChange);
+            socket.on(MONACO_CHANGES, onRemoteChange);
         }
     }, [crdtDoc]);
 
@@ -105,7 +110,7 @@ export default function protosync() {
 
     return (
         <div>
-            <Monaco onChange={onMonacoChange} value={_editorValue} onMount={handleEditorDidMount}/>
+            <Monaco onChange={onMonacoChange} value={_editorValue} onMount={handleEditorDidMount} />
         </div>
     )
 }
