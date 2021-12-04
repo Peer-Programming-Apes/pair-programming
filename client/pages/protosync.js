@@ -6,17 +6,40 @@ import { CRDT, randomID, Char } from '../sequence-crdt/index'
 const INSERT = 0;
 const DELETE = 1;
 const MONACO_CHANGES = "monaco changes";
+const CRDT_INIT = "crdt init"
 const EMIT_LIMIT = 2000;
 
+let crdtDoc;
+let socket;
+
+
 export default function protosync() {
-    const [socket, setSocket] = useState();
+    const [isReady, setIsReady] = useState(false);
     const [editorValue, setEditorValue] = useState();   // dummy editor value
     const [_editorValue, _setEditorValue] = useState(); // actual editor value
-    const [crdtDoc, setCrdtDoc] = useState();
     const [cursorPosition, setcursorPosition] = useState();
     const [lastCursorPosition, setLastCursorPosition] = useState();
 
     const editorRef = useRef(null);
+
+    useEffect(() => {
+        socket = io('http://192.168.0.104:3001');
+
+        socket.on('connect', (changes) => {
+            console.log("Connected!");
+
+            socket.on(CRDT_INIT, (changes) => {
+                crdtDoc = new CRDT(new randomID());
+                onRemoteChange(changes);
+                setIsReady(true);
+            })
+
+            socket.on(MONACO_CHANGES, onRemoteChange);
+
+            socket.on('disconnect', () => {setIsReady(false);});
+        });
+
+    }, []);
 
     // onMount handler
     function handleEditorDidMount(editor, monaco) {
@@ -33,6 +56,7 @@ export default function protosync() {
 
     // handle change events of MonacoEditor
     function onMonacoChange(value, event) {
+        console.log(event);
         let changes = [];
         for (let monacoChange of event.changes) {
             // very basic; TODO: handle all types of event
@@ -67,6 +91,7 @@ export default function protosync() {
 
     // apply remote change
     function onRemoteChange(changes) {
+        console.log(changes.length);
         for (let change of changes) {
             if (change.type === INSERT) {
                 crdtDoc.handleRemoteInsert(change.char);
@@ -74,27 +99,12 @@ export default function protosync() {
             else if (change.type === DELETE) {
                 crdtDoc.handleRemoteDelete(change.char);
             }
+            else {
+                console.log("invalid change.type", change);
+            }
         }
         setEditorValue(crdtDoc.text);
     }
-
-    useEffect(() => {
-        const s = io('http://192.168.0.104:3001');
-        setSocket(s);
-
-        s.on('connect', () => {
-            console.log("Connected!");
-            const doc = new CRDT(randomID());
-            setCrdtDoc(doc);
-        });
-    }, []);
-
-    useEffect(() => {
-        // console.log("crdtDoc changed", crdtDoc);
-        if (crdtDoc && socket) {
-            socket.on(MONACO_CHANGES, onRemoteChange);
-        }
-    }, [crdtDoc]);
 
     useEffect(() => {
         setLastCursorPosition(cursorPosition);
@@ -107,31 +117,16 @@ export default function protosync() {
         }
     }, [_editorValue]);
 
-
-    return (
-        <div>
-            <Monaco onChange={onMonacoChange} value={_editorValue} onMount={handleEditorDidMount} />
-        </div>
-    )
+    if (isReady)
+        return (
+            <div>
+                <Monaco onChange={onMonacoChange} value={_editorValue} onMount={handleEditorDidMount} />
+            </div>
+        )
+    else 
+        return (
+            <div>
+                Trying to connect...
+            </div>
+        )
 }
-
-
-/*
-    Extra code:
-
-    // from onMonacoChange()
-    // a "fix" for loopback issue caused by CR from CRLF EOL
-    // no need to do this if setting EOF for the model
-    // may cause unknown side effects!
-    if (event.changes[0].forceMoveMarkers) {
-        console.log("forceMoveMarkers", event);
-        return;
-    }
-
-
-
-    useEffect(() => {
-        console.log("useEffect:cursorPosition", cursorPosition);
-    }, [cursorPosition]);
-
-*/
