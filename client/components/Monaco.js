@@ -1,5 +1,5 @@
-import React, { Component, useEffect } from 'react';
-import Editor, { useMonaco } from '@monaco-editor/react';
+import React from 'react';
+import Editor from '@monaco-editor/react';
 
 
 export default function Monaco(props) {
