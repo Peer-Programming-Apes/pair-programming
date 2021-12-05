@@ -16,7 +16,7 @@ passport.serializeUser((user, done) => {
 //invoked when browser sends a request to the server -> the cookie is sent along with the req -> token returned in req obj
 passport.deserializeUser(async (id, done) => {
 	const cookieUser = await User.findById(id);
-	console.log("inside deserializeUser");
+	console.log("inside deserializeUser", cookieUser);
 	done(null, cookieUser);
 });
 
@@ -27,7 +27,7 @@ passport.use(
 			clientSecret: process.env.CLIENT_SECRET,
 			callbackURL: `http://localhost:${PORT}/auth/google/callback`,
 		},
-		
+
 		async function (accessToken, refreshToken, bearer, info, done) {
 			const { email, name, sub, picture } = info._json;
 
