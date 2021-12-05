@@ -70,8 +70,48 @@ export default function protosync() {
 
         attachOnDidChangeContentHandler();
     }
+    
 
-    function setValue(value) {
+    function calculateCursorPosition(position, text, idx, isLineFeed, changeType) {
+        console.log(position);
+        let line = 1, col = 1;
+        for (let i = 0; i < idx; i++) {
+            if (text[i] == '\n') {
+                line++;
+                col = 1;
+            } else {
+                col++;
+            }
+        }
+        console.log(line, col);
+        if (isLineFeed) {
+            if (changeType == INSERT) {
+                console.log("LF I");
+                if (line < position.lineNumber) {
+                    position.lineNumber++;
+                } else if (line == position.lineNumber && col < position.column) {
+                    position.lineNumber++;
+                    position.column -= (col - 1);
+                }
+            } else if (changeType == DELETE) {
+                console.log("LF D");
+                if (line < position.lineNumber - 1) {
+                    position.lineNumber--;
+                } else if (line == position.lineNumber - 1) {
+                    position.lineNumber--;
+                    position.column += (col - 1);
+                }
+            }
+        } else {
+            if (line == position.lineNumber && col < position.column) {
+                if (changeType == INSERT) position.column++;
+                else if (changeType == DELETE) position.column--;
+            }
+        }
+        return position;
+    }
+
+    function setValue(value, idx, isLineFeed, changeType) {
         // do not do anythng if editor not mounted
         if (!editorRef.current) return;
 
@@ -81,7 +121,8 @@ export default function protosync() {
         // storing the current cursor position
         // TODO: fix cursor position for same line changes
         const position = null;
-        if (cursorPositionRef.current) position = cursorPositionRef.current.position;
+        if (cursorPositionRef.current) 
+            position = calculateCursorPosition(cursorPositionRef.current.position, value, idx, isLineFeed, changeType);
 
         editorRef.current.getModel().setValue(value);
 
@@ -143,16 +184,19 @@ export default function protosync() {
 
         for (let change of changes) {
             if (change.type === INSERT) {
-                crdtRef.current.handleRemoteInsert(change.char);
+                const idx = crdtRef.current.handleRemoteInsert(change.char);
+                setValue(crdtRef.current.text, idx, change.char.value === "\n", change.type);
+
             }
             else if (change.type === DELETE) {
-                crdtRef.current.handleRemoteDelete(change.char);
+                const idx = crdtRef.current.handleRemoteDelete(change.char);
+                setValue(crdtRef.current.text, idx, change.char.value === "\n", change.type);
             }
             else {
                 console.log("invalid change.type", change);
             }
         }
-        setValue(crdtRef.current.text);
+        // setValue(crdtRef.current.text);
     }
 
 
