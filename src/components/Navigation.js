@@ -50,7 +50,7 @@ const Navigation = () => {
 					<div className={styles.navlinks}>
 						{!isLoggedIn && (
 							<a
-								href={`${process.env.REACT_APP_SERVER_URL}/auth/google`}
+								href={`https://peer-programming-s.herokuapp.com/auth/google`}
 								className={styles.navlink}
 							>
 								Sign in

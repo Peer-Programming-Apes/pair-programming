@@ -25,7 +25,7 @@ export const createSession = createAsyncThunk(
 			console.log("sending request for session");
 
 			const session = await axios.post(
-				`${process.env.REACT_APP_SERVER_URL}/api/session`,
+				`https://peer-programming-s.herokuapp.com/api/session`,
 				{ name, userId },
 				{ withCredentials: true }
 			);
@@ -53,7 +53,7 @@ export const deleteSession = createAsyncThunk(
 	async (sessionId, { rejectWithValue }) => {
 		try {
 			const delSession = await axios.delete(
-				`${process.env.REACT_APP_SERVER_URL}/api/session/${sessionId}`
+				`https://peer-programming-s.herokuapp.com/api/session/${sessionId}`
 			);
 
 			console.log("deleting session", delSession.data);
@@ -71,7 +71,7 @@ export const fetchUser = createAsyncThunk(
 	async (slug, { rejectWithValue }) => {
 		try {
 			const res = await axios.get(
-				`${process.env.REACT_APP_SERVER_URL}/api/user`,
+				`https://peer-programming-s.herokuapp.com/api/user`,
 				{
 					withCredentials: true,
 				}

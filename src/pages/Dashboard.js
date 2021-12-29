@@ -18,7 +18,7 @@ const Dashboard = () => {
 	const userStatus = useSelector((state) => state.user.status);
 
 	const logoutHandler = (e) => {
-		window.location.href = `${process.env.REACT_APP_SERVER_URL}/auth/logout`;
+		window.location.href = `https://peer-programming-s.herokuapp.com/auth/logout`;
 	};
 
 	//push inside a utility funciton
