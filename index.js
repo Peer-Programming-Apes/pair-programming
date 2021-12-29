@@ -14,13 +14,13 @@ require("dotenv").config();
 const { DBManager } = require("./utils/DBManager");
 const SessionManager = require("./utils/SessionManager");
 
-const server = require('http').createServer(app);
+const server = require("http").createServer(app);
 
-const io = require('socket.io')(server, {
-    cors: {
-        origin: [process.env.CLIENT_URL],
-        methods: ['GET', 'POST']
-    }
+const io = require("socket.io")(server, {
+	cors: {
+		origin: [process.env.CLIENT_URL],
+		methods: ["GET", "POST"],
+	},
 });
 
 SessionManager(io, new DBManager());
@@ -32,17 +32,21 @@ const PORT = process.env.PORT;
 app.set("view engine", "ejs");
 app.use(express.json());
 
+app.set("trust-proxy", 1);
+
 app.use(
 	cookieSession({
 		name: "pair-programming",
 		maxAge: 60 * 60 * 1000,
 		keys: [COOKIE_KEYS],
+		secure: true,
+		sameSite: "none",
 	})
 );
 
 app.use(
 	cors({
-    	origin: process.env.CLIENT_URL, 	// "http://localhost:3000"
+		origin: process.env.CLIENT_URL, // "http://localhost:3000"
 		methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
 		credentials: true, // allow session cookie from browser to pass through
 	})
@@ -93,6 +97,3 @@ app.use((err, req, res, next) => {
 // });
 // by server.listen to allow socket.io to listen on same port
 server.listen(PORT);
-
-
-
