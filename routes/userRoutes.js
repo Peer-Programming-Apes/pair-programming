@@ -2,7 +2,7 @@ const router = require("express").Router();
 const checkUser = require("../middlewares/authMiddleware");
 
 const dummuy = {
-	_id: { $oid: "61c9c1a2aa9b1771bcf4501f" },
+	_id: "61c9c1a2aa9b1771bcf4501f",
 	googleID: "108824220111422489847",
 	email: "juit23drive@gmail.com",
 	name: "Subodh Singh",
@@ -12,7 +12,7 @@ const dummuy = {
 	userSessions: [
 		{
 			name: "session 1",
-			sessionId: { $oid: "61cc7ee2a48310a1fd3aff8c" },
+			sessionId: "61cc7ee2a48310a1fd3aff8c",
 			createdAt: { $date: { $numberLong: "1640791778533" } },
 		},
 	],
