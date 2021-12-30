@@ -18,7 +18,7 @@ export const fetchSessionById = createAsyncThunk(
 	async (sessionId, { rejectWithValue }) => {
 		try {
 			const res = await axios.get(
-				`${process.env.REACT_APP_SERVER_URL}/api/session/${sessionId}`,
+				`https://peer-programming-s.herokuapp.com/api/session/${sessionId}`,
 				{
 					withCredentials: true,
 				}
@@ -43,7 +43,7 @@ export const addNewDocument = createAsyncThunk(
 
 		try {
 			const res = await axios.post(
-				`${process.env.REACT_APP_SERVER_URL}/api/document`,
+				`https://peer-programming-s.herokuapp.com/api/document`,
 				{
 					title,
 					type,
@@ -75,7 +75,7 @@ export const deleteDocument = createAsyncThunk(
 	async (documentId, { rejectWithValue }) => {
 		try {
 			const delDocument = await axios.delete(
-				`${process.env.REACT_APP_SERVER_URL}/api/document/${documentId}`
+				`https://peer-programming-s.herokuapp.com/api/document/${documentId}`
 			);
 
 			console.log("deleting session", delDocument.data);

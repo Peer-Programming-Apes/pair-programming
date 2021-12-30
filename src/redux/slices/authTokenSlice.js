@@ -15,7 +15,7 @@ export const fetchToken = createAsyncThunk(
 	async (slug, { rejectWithValue }) => {
 		try {
 			const res = await axios.get(
-				`${process.env.REACT_APP_SERVER_URL}/api/user`,
+				`https://peer-programming-s.herokuapp.com/api/user`,
 				{
 					withCredentials: true,
 				}

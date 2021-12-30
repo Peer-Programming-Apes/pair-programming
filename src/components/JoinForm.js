@@ -30,7 +30,7 @@ export default function JoinForm() {
 		e.preventDefault();
 
 		if (!isLoggedIn) {
-			window.location.href = `${process.env.REACT_APP_SERVER_URL}/auth/google`;
+			window.location.href = `https://peer-programming-s.herokuapp.com/auth/google`;
 		}
 
 		//TODO: handle if only id is given

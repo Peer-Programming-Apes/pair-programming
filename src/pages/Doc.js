@@ -31,7 +31,7 @@ const Doc = () => {
 		(async () => {
 			try {
 				const doc = await axios.get(
-					`${process.env.REACT_APP_SERVER_URL}/api/document/${did}`,
+					`https://peer-programming-s.herokuapp.com/api/document/${did}`,
 					{
 						withCredentials: true,
 					}
@@ -57,7 +57,7 @@ const Doc = () => {
 
 		try {
 			const savedDoc = await axios.patch(
-				`${process.env.REACT_APP_SERVER_URL}/api/document/${did}`,
+				`https://peer-programming-s.herokuapp.com/api/document/${did}`,
 				{ savedCode: documentData },
 				{ withCredentials: true }
 			);
