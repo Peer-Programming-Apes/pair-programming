@@ -32,12 +32,13 @@ const PORT = process.env.PORT;
 app.set("view engine", "ejs");
 app.use(express.json());
 
-app.set("trust-proxy", 1);
+// app.set("trust-proxy", 1);
 
 app.use(
 	cookieSession({
 		name: "pair-programming",
-		maxAge: 60 * 60 * 1000,
+		httpOnly: true,
+		maxAge: 3600000 * 5,
 		keys: [COOKIE_KEYS],
 		secure: true,
 		sameSite: "none",
