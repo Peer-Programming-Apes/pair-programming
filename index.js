@@ -16,6 +16,8 @@ const SessionManager = require("./utils/SessionManager");
 
 const server = require("http").createServer(app);
 
+const session = require("express-session");
+
 const io = require("socket.io")(server, {
 	cors: {
 		origin: [process.env.CLIENT_URL],
@@ -34,14 +36,28 @@ app.use(express.json());
 
 // app.set("trust-proxy", 1);
 
+// app.use(
+// 	cookieSession({
+// 		name: "pair-programming",
+// 		httpOnly: true,
+// 		maxAge: 3600000 * 5,
+// 		keys: [COOKIE_KEYS],
+// 		secure: true,
+// 		sameSite: "none",
+// 	})
+// );
+
 app.use(
-	cookieSession({
+	session({
 		name: "pair-programming",
-		httpOnly: true,
-		maxAge: 3600000 * 5,
-		keys: [COOKIE_KEYS],
-		secure: true,
-		sameSite: "none",
+		secret: COOKIE_KEYS,
+		resave: true,
+		saveUninitialized: true,
+		cookie: {
+			sameSite: "none",
+			secure: true,
+			maxAge: 1000 * 60 * 60 * 24 * 7, // One Week
+		},
 	})
 );
 

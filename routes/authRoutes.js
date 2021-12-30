@@ -16,10 +16,11 @@ router.get(
 router.get(
 	"/google/callback",
 	passport.authenticate("google", {
-		failureRedirect: "/auth/login",
+		failureRedirect: process.env.CLIENT_URL,
+		session: true,
 	}),
 	function (req, res) {
-    console.log("callback called in auth routes", req.user, res);
+		console.log("callback called in auth routes", req.user, res);
 		// res.send(`Callback called ${req.user}`);
 		res.redirect(CLIENT_URI);
 	}
