@@ -19,6 +19,7 @@ router.get(
 		failureRedirect: "/auth/login",
 	}),
 	function (req, res) {
+    console.log("callback called in auth routes", req.user, res);
 		// res.send(`Callback called ${req.user}`);
 		res.redirect(CLIENT_URI);
 	}
