@@ -4,8 +4,9 @@ const checkUser = (req, res, next) => {
 		console.log("middleware success : ", req.user);
 		next();
 	} else {
-		console.log("middleware failure");
-		res.status(403).json("unauthorized");
+		// console.log("middleware failure");
+		// res.status(403).json("unauthorized");
+    next();
 	}
 };
 
