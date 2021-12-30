@@ -14,18 +14,18 @@ require("dotenv").config();
 const { DBManager } = require("./utils/DBManager");
 const SessionManager = require("./utils/SessionManager");
 
-// const server = require("http").createServer(app);
+const server = require("http").createServer(app);
 
 const session = require("express-session");
 
-// const io = require("socket.io")(server, {
-// 	cors: {
-// 		origin: [process.env.CLIENT_URL],
-// 		methods: ["GET", "POST"],
-// 	},
-// });
+const io = require("socket.io")(server, {
+	cors: {
+		origin: [process.env.CLIENT_URL],
+		methods: ["GET", "POST"],
+	},
+});
 
-// SessionManager(io, new DBManager());
+SessionManager(io, new DBManager());
 
 const URI = process.env.MONGODB_URI;
 const COOKIE_KEYS = process.env.COOKIE_KEYS;
@@ -109,8 +109,8 @@ app.use((err, req, res, next) => {
 });
 
 // replacing
-app.listen(PORT, () => {
-	console.log("connected to port 4000");
-});
+// app.listen(PORT, () => {
+// 	console.log("connected to port 4000");
+// });
 // by server.listen to allow socket.io to listen on same port
-// server.listen(PORT);
+server.listen(PORT);
